@@ -13,10 +13,6 @@ const authorise = (req, res, next) => {
       success: true,
       token,
     });
-  } else if (!authorization) {
-    return res
-      .status(403)
-      .json({ error: true, message: "Authorization header not found" });
   } else {
     res.status(400).json({ error: true, message: "Unauthorized" });
   }
@@ -29,7 +25,7 @@ const authorise = (req, res, next) => {
     next();
   } catch (err) {
     // console.log("token is invalid");
-    res.status(403).json({ error: true, message: "token is invalid" });
+    return res.status(403).json({ error: true, message: "token is invalid" });
   }
 };
 // || Object.keys(req.query).length != 0
@@ -55,7 +51,7 @@ router.get("/symbols", function (req, res, next) {
       .then((rows) => {
         // if data exists
         if (rows.length === 0) {
-          return res.status(404).json({ error: true, message: "NOT FOUND" });
+          return res.status(404).json({ error: true, message: "Forbidden" });
         } else {
           return res.status(200).json(rows);
         }
@@ -63,8 +59,7 @@ router.get("/symbols", function (req, res, next) {
       .catch((err) => console.log(err));
   } else {
     // if the industry query is not attached to the request url, throw an error exception
-    // console.log(Object.keys(req.query).includes("industry"));
-    if (!Object.keys(req.query).includes("industry")) {
+    if (!industry) {
       return res.status(400).json({
         error: true,
         message: "Invalid query parameter: only 'industry' is permitted",
@@ -72,7 +67,7 @@ router.get("/symbols", function (req, res, next) {
     } else {
       industryQuery
         .then((rows) => {
-          // if data exists
+          // if no record is found, throw an error message, otherwise return the data
           if (rows.length === 0) {
             return res
               .status(404)
@@ -85,18 +80,35 @@ router.get("/symbols", function (req, res, next) {
     }
   }
 });
-
+router.get("/", function (req, res, next) {
+  const { symbol } = req.params;
+  if (!symbol) {
+    return res.status(400).json({
+      error: true,
+      message:
+        "Request on /stocks must include symbol as path parameter, or alternatively you can hit /stocks/symbols to get all symbols",
+    });
+  }
+});
 /*
  * Returns the latest entry for a particular stock searched by symbol (1-5 upper case letters).
  */
 router.get("/:symbol", function (req, res, next) {
   const { symbol } = req.params;
   console.log(symbol);
+
   // check if query is lowercase and is within the range of 5 characters
   if (hasLowerCase(symbol) || symbol.length > 5) {
+    // if ((!/\b[A-Z]{1,5}| b/, symbol)) {
     return res.status(400).json({
       error: true,
       message: "Stock symbol incorrect format - must be 1-5 capital letters",
+    });
+  } else if (Object.keys(req.query).length != 0) {
+    return res.status(400).json({
+      error: true,
+      message:
+        "Date parameters only available on authenticated route /stocks/authed",
     });
   } else {
     // otherwise, query the database
@@ -119,18 +131,13 @@ router.get("/:symbol", function (req, res, next) {
   }
 });
 
-// http://localhost:3001/sample?id=123
-// http://131.181.190.87:3005/stocks/authet6d/AAL?from=2020-03-15T00%3A00%3A00.000Z&to=2020-03-20T00%3A00%3A00.000Z
 router.get("/authed/:symbol", function (req, res, next) {
-  // console.log(authorise);
-  const response = authorise;
-  console.log(response);
-
   const { from } = req.query;
   const { to } = req.query;
   const { symbol } = req.params;
   const parsedFrom = moment(from).format("YYYY/MM/DD");
   const parsedTo = moment(to).format("YYYY/MM/DD");
+
   const symbolQuery = req.db
     .from("stocks")
     .select("*")
@@ -139,14 +146,14 @@ router.get("/authed/:symbol", function (req, res, next) {
     .from("stocks")
     .select("*")
     .where("symbol", "=", symbol)
-    .where("timestamp", "like", `%${from}%`)
+    .where("timestamp", "like", from)
     .distinct();
 
   const toQuery = req.db
     .from("stocks")
     .select("*")
     .where("symbol", "=", symbol)
-    .where("timestamp", "like", `%${to}%`)
+    .where("timestamp", "like", to)
     .distinct();
 
   const fromToQuery = req.db
@@ -157,10 +164,14 @@ router.get("/authed/:symbol", function (req, res, next) {
     .where("timestamp", "<=", parsedTo)
     .distinct();
 
-  if (response) {
-    console.log("heelo");
+  if (!req.headers.authorization) {
+    return res.status(403).json({
+      error: true,
+      message: "Authorization header not found",
+    });
   }
-  // if (`/[a-z]{1,5}/g` == symbol) {
+
+  // if (!symbol.match(/[A-Z]{1,5}/g)) {
   if (hasLowerCase(symbol) || symbol.length > 5) {
     return res.status(400).json({
       error: true,
@@ -206,6 +217,7 @@ router.get("/authed/:symbol", function (req, res, next) {
           }
         });
       } else if (from && to) {
+        console.log("hello from to");
         fromToQuery.then((rows) => {
           if (rows.length == 0) {
             return res.status(404).json({
@@ -229,106 +241,8 @@ router.get("/authed/:symbol", function (req, res, next) {
   }
 });
 
-function throwErrSymbol() {
-  return res.status(404).json({
-    error: true,
-    message: "No entries available for query symbol for supplied date range",
-  });
-}
 function hasLowerCase(str) {
   return str.toUpperCase() != str;
 }
 
 module.exports = router;
-
-// if (
-//   Object.keys(symbol).length === 0 ||
-//   hasLowerCase(symbol) ||
-//   symbol.length > 5
-// ) {
-//   return res.status(400).json({
-//     error: true,
-//     message: "Stock symbol incorrect format - must be 1-5 capital letters",
-//   });
-// }
-// // otherwise, search for stock
-// else {
-//   // otherwise, query the database
-//   req.db
-//     .from("stocks")
-//     .select("*")
-//     .where("symbol", "=", symbol)
-//     .then((rows) => {
-//       // check for stock's entry
-//       if (rows == 0) {
-//         return res.status(404).json({
-//           error: true,
-//           message: "No entry for symbol in stocks database",
-//         });
-//       } else {
-//         //return first entry in the database
-//         if (Object.keys(req.query).length === 1) {
-//           // console.log("you hit from");
-//           fromQuery.then((rows) => {
-//             if (rows.length === 0) {
-//               return res.status(404).json({
-//                 error: true,
-//                 message:
-//                   "No entries available for query symbol for supplied date range",
-//               });
-//             } else {
-//               return res.status(200).json(rows);
-//             }
-//           });
-//         } else {
-//           return res.status(200).json(rows[0]);
-//         }
-//       }
-//     });
-// }
-
-// console.log(Object.keys(req.query));
-// if no query if found, fetch all stocks
-// if (Object.keys(req.query) != "industry") {
-//   return res.status(400).json({
-//     error: true,
-//     message: "Invalid query parameter: only 'industry' is permitted",
-//   });
-// } else {
-// }
-
-// } else {
-//   if (!industry) {
-//     stocksQuery
-//       .then((rows) => {
-//         // if data exists
-//         if (rows.length === 0) {
-//           res
-//             .status(404)
-//             .json({ error: true, message: "Industry sector not found" });
-//         } else {
-//           res.status(200).json(rows);
-//         }
-//       })
-//       .catch((err) => console.log(err));
-//   }
-//   // otherwise, search for stock
-//   else {
-//     req.db
-//       .from("stocks")
-//       .select("name", "industry", "symbol")
-//       .where("industry", "like", `%${industry}%`)
-//       .distinct()
-//       .then((rows) => {
-//         // if data exists
-//         if (rows.length === 0) {
-//           res
-//             .status(404)
-//             .json({ error: true, message: "Industry sector not found" });
-//         } else {
-//           res.status(200).json(rows);
-//         }
-//       })
-//       .catch((err) => console.log(err));
-//   }
-// }
