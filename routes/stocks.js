@@ -24,13 +24,24 @@ const authorise = (req, res, next) => {
     // permit user to advance to route
     next();
   } catch (err) {
-    // console.log("token is invalid");
     return res.status(403).json({ error: true, message: "token is invalid" });
   }
 };
-// || Object.keys(req.query).length != 0
 /*
- * Returns all available stocks, optionally filtered by industry sector.
+ *  if no parameter is provided after /stocks, throw an error message
+ */
+router.get("/", function (req, res, next) {
+  const { symbol } = req.params;
+  if (!symbol) {
+    return res.status(400).json({
+      error: true,
+      message:
+        "Request on /stocks must include symbol as path parameter, or alternatively you can hit /stocks/symbols to get all symbols",
+    });
+  }
+});
+/*
+ *  Returns all available stocks, optionally filtered by industry sector.
  */
 router.get("/symbols", function (req, res, next) {
   const { industry } = req.query;
@@ -45,7 +56,7 @@ router.get("/symbols", function (req, res, next) {
     .where("industry", "like", `%${industry}%`)
     .distinct();
 
-  //if no query parameter is present default to url: stocks/symbols
+  //if no query parameter is provided set the url to: stocks/symbols to display all stocks
   if (Object.keys(req.query).length === 0) {
     stocksQuery
       .then((rows) => {
@@ -80,26 +91,14 @@ router.get("/symbols", function (req, res, next) {
     }
   }
 });
-router.get("/", function (req, res, next) {
-  const { symbol } = req.params;
-  if (!symbol) {
-    return res.status(400).json({
-      error: true,
-      message:
-        "Request on /stocks must include symbol as path parameter, or alternatively you can hit /stocks/symbols to get all symbols",
-    });
-  }
-});
+
 /*
  * Returns the latest entry for a particular stock searched by symbol (1-5 upper case letters).
  */
 router.get("/:symbol", function (req, res, next) {
   const { symbol } = req.params;
-  console.log(symbol);
-
-  // check if query is lowercase and is within the range of 5 characters
+  // If req.query.symbol contains lowercase or has more than 5 characters, throw an error message,
   if (hasLowerCase(symbol) || symbol.length > 5) {
-    // if ((!/\b[A-Z]{1,5}| b/, symbol)) {
     return res.status(400).json({
       error: true,
       message: "Stock symbol incorrect format - must be 1-5 capital letters",
@@ -163,24 +162,24 @@ router.get("/authed/:symbol", function (req, res, next) {
     .where("timestamp", ">=", parsedFrom)
     .where("timestamp", "<=", parsedTo)
     .distinct();
-
+  // if no autorisation header is found, terminate current process and throw error message
   if (!req.headers.authorization) {
     return res.status(403).json({
       error: true,
       message: "Authorization header not found",
     });
   }
-
-  // if (!symbol.match(/[A-Z]{1,5}/g)) {
+  // If req.query.symbol contains lowercase or has more than 5 characters, throw an error message,
   if (hasLowerCase(symbol) || symbol.length > 5) {
     return res.status(400).json({
       error: true,
       message: "Stock symbol incorrect format - must be 1-5 capital letters",
     });
   } else {
+    // otherwise, query the database
     if (Object.keys(req.query).length === 0) {
       symbolQuery.then((rows) => {
-        // check for stock's entry
+        // check if stock(filtered by sybol) is available in the database
         if (rows == 0) {
           res.status(404).json({
             error: true,
@@ -217,7 +216,6 @@ router.get("/authed/:symbol", function (req, res, next) {
           }
         });
       } else if (from && to) {
-        console.log("hello from to");
         fromToQuery.then((rows) => {
           if (rows.length == 0) {
             return res.status(404).json({
@@ -229,7 +227,7 @@ router.get("/authed/:symbol", function (req, res, next) {
             return res.status(200).json(rows);
           }
         });
-      } else if (!from && !to) {
+      } else {
         return res.status(400).json({
           error: true,
           message:
@@ -237,7 +235,6 @@ router.get("/authed/:symbol", function (req, res, next) {
         });
       }
     }
-    // otherwise, query the database
   }
 });
 
