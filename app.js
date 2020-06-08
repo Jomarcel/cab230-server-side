@@ -14,12 +14,10 @@ const usersRouter = require("./routes/users");
 
 const app = express();
 
-// const swaggerUI = require("swagger-ui-express");
-// yaml = require("yamljs");
+const swaggerUI = require("swagger-ui-express");
+yaml = require("yamljs");
 
-// swaggerDocument = yaml.load("./docs/swagger.yaml");
-
-// app.use("/", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
+swaggerDocument = yaml.load("./docs/swagger.yaml");
 
 app.use((req, res, next) => {
   req.db = knex;
@@ -48,6 +46,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/user", usersRouter);
 app.use("/stocks", stocksRouter);
+app.use("/", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
 
 app.get("/knex", function (req, res, next) {
   req.db

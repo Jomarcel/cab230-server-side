@@ -27,12 +27,15 @@ const authorise = (req, res, next) => {
     return res.status(403).json({ error: true, message: "token is invalid" });
   }
 };
+
 /*
  *  if no parameter is provided after /stocks, throw an error message
  */
 router.get("/", function (req, res, next) {
-  const { symbol } = req.params;
-  if (!symbol) {
+  if (
+    Object.keys(req.params).length === 0 ||
+    Object.keys(req.query).length === 0
+  ) {
     return res.status(400).json({
       error: true,
       message:
@@ -40,6 +43,7 @@ router.get("/", function (req, res, next) {
     });
   }
 });
+
 /*
  *  Returns all available stocks, optionally filtered by industry sector.
  */
@@ -62,6 +66,7 @@ router.get("/symbols", function (req, res, next) {
       .then((rows) => {
         // if data exists
         if (rows.length === 0) {
+          e;
           return res.status(404).json({ error: true, message: "Forbidden" });
         } else {
           return res.status(200).json(rows);
@@ -96,6 +101,7 @@ router.get("/symbols", function (req, res, next) {
  * Returns the latest entry for a particular stock searched by symbol (1-5 upper case letters).
  */
 router.get("/:symbol", function (req, res, next) {
+  // extract symbol from req.params
   const { symbol } = req.params;
   // If req.query.symbol contains lowercase or has more than 5 characters, throw an error message,
   if (hasLowerCase(symbol) || symbol.length > 5) {
@@ -145,14 +151,14 @@ router.get("/authed/:symbol", function (req, res, next) {
     .from("stocks")
     .select("*")
     .where("symbol", "=", symbol)
-    .where("timestamp", "like", from)
+    .where("timestamp", ">", parsedFrom)
     .distinct();
 
   const toQuery = req.db
     .from("stocks")
     .select("*")
     .where("symbol", "=", symbol)
-    .where("timestamp", "like", to)
+    .where("timestamp", "<", parsedTo)
     .distinct();
 
   const fromToQuery = req.db

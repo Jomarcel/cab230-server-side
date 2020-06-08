@@ -4,6 +4,8 @@ module.exports = {
     host: "127.0.0.1",
     database: "webcomputing",
     user: "root",
-    password: "pseudocode1412",
+    password: "Cab230!",
   },
+};
+ },
 };
